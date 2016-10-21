@@ -23,48 +23,22 @@
 
 use strict;
 use warnings;
-use Mojo::JSON qw(encode_json);
+use Mojo::IOLoop;
 use Mojo::Log;
-use Mojo::UserAgent;
 use FindBin;
 use lib "$FindBin::Bin";
-use ScoreList;
+use BowlingScore;
 
-sub list_text {
-   my ($label, $list) = @_;
-   return sprintf('%s: %s (length %i)', $label, encode_json($list), scalar(@$list));
-}
-
-die("Usage: $0 [debug|info|warn|error]\n") unless !@ARGV || @ARGV == 1 && $ARGV[0] =~ /^(debug|info|warn|error)$/;
-
-my $url = 'http://37.139.2.74/api/points';
+die("Usage: $0 [info|warn|error]\n") unless !@ARGV || @ARGV == 1 && $ARGV[0] =~ /^(info|warn|error)$/;
 my $log = Mojo::Log->new(level => $ARGV[0] // 'info');
-my $ua  = Mojo::UserAgent->new;
 
-while (1) {
-   my $tx = $ua->get($url);
-   die(sprintf("Woops, get failed with %i\n", $tx->res->code)) unless $tx->res->code == 200;
-   my $input = $tx->res->json;
-   $log->info('Token: ' . $input->{token});
-   $log->info(list_text('Input', $input->{points}));
-   my $sl = ScoreList->new(frames => $input->{points});
-   $log->debug(list_text('Frame scores', $sl->frame_scores));
-   $log->info(list_text('Scores', $sl->scores));
-   my $msg = $sl->check;
-   $log->warn($msg, list_text('Input', $input->{points})) if $msg;
-   $tx = $ua->post($url, form => {token  => $input->{token}, points => encode_json($sl->scores)});
-   die(sprintf("Woops, post failed with %i\n", $tx->res->code)) unless $tx->res->code == 200;
-   if ($tx->res->json->{success}) {
-      $log->info('Posted data was accepted');
-   } elsif ($msg) {
-      $log->info('Posted data was not accepted');
-   } else {
-      $log->error(
-         'Posted data was not accepted',
-         'Token: ' . $input->{token},
-         list_text('Input', $input->{points}),
-         list_text('Frame scores', $sl->frame_scores),
-         list_text('Scores', $sl->scores)
-      );
+BowlingScore->new(
+   url => 'http://37.139.2.74/api/points',
+   msg => sub {
+      my ($level, @text) = @_;
+      return if $level eq 'group';
+      $level = 'info' unless $level =~ /^(info|warn|error|fatal)$/;
+      $log->$level(@text);
    }
-}
+)->running(1);
+Mojo::IOLoop->start;

@@ -1,0 +1,120 @@
+#!/usr/bin/perl
+
+# Copyright (C) 2016 Lars Hansen <lh@soem.dk>
+# 
+# Author: Lars Hansen <lh@soem.dk>
+# 
+# License:
+# 
+#   This package is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#   
+#   This package is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#   GNU General Public License for more details.
+#   
+#   The GNU General Public License may be found at <http://www.gnu.org/licenses/>.
+# 
+# On Debian systems, the complete text of the GNU General
+# Public License version 3 can be found in "/usr/share/common-licenses/GPL-3".
+
+use Mojolicious::Lite;
+use FindBin;
+use lib "$FindBin::Bin";
+use BowlingScore;
+
+my $clients = {};
+my $bs = BowlingScore->new(
+   url => 'http://37.139.2.74/api/points',
+   msg => sub {
+      my ($level, @text) = @_;
+      for my $key (sort(keys(%$clients))) {
+         $clients->{$key}->{tx}->send({json => {level => $level, text => \@text}});
+      }
+   }
+);
+
+get '/' => sub {
+   my ($self) = @_;
+   $self->render(template => 'log');
+};
+
+websocket '/ws' => sub {
+   my ($self) = @_;
+   $clients->{$self->tx->connection}->{tx} = $self->tx;
+   $self->inactivity_timeout(300); # seconds
+   $self->on(json => sub {
+      my ($self, $data) = @_;
+      $bs->running($data);
+   });
+   $self->on(finish => sub {
+      my ($self, $code, $reason) = @_;
+      delete($clients->{$self->tx->connection});
+   });
+};
+
+app->start;
+
+__DATA__
+
+@@ log.html.ep
+
+<style>
+#page {
+   height: 100%;
+   display: flex;
+   flex-flow: column;
+}
+#btn {
+   margin: 5px;
+}
+#log {
+   flex: 1 1 auto;
+   overflow-y: auto;
+   min-height: 0px;
+}
+.group {
+   border: 1px solid #999999;
+   border-radius: 5px;
+   margin: 5px;
+}
+.warn   {background-color: #ffdb99;}
+.error  {background-color: #ff9999;}
+.fatal  {background-color: #ff0000;}
+.accept {background-color: #99ff99;}
+</style>
+
+<div id="page">
+   <div id="btn">
+      <button type="button" disabled id="go">Go</button> <button type="button" disabled id="stop">Stop</button>
+   </div>
+   <div id="log"></div>
+</div>
+
+<script src="https://code.jquery.com/jquery-1.7.2.min.js"></script>
+<script>
+$(function () {
+
+   var div = $('#log');
+   var group;
+   var log = function (data) {
+      if (data.level == 'group')
+         div.append(group = $('<div class="group"></div>'));
+      else
+         group.append('<div class="' + data.level + '">' + data.text.join('<br>') + '</div>');
+      div.scrollTop(div.prop('scrollHeight'));
+   };
+
+   var ws = new WebSocket('ws://localhost:3000/ws');
+   ws.onopen    = function () {$('button').prop('disabled', false);};
+   ws.onclose   = function () {$('button').prop('disabled', true);};
+   ws.onmessage = function (msg) {log(JSON.parse(msg.data));};
+
+   $('#go').click(function () {ws.send(JSON.stringify(true));});
+   $('#stop').click(function () {ws.send(JSON.stringify(false));});
+
+});
+</script>

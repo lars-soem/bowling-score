@@ -38,7 +38,8 @@ die("Usage: $0 FRAMELIST ...\n") unless @ARGV;
 for my $arg (@ARGV) {
    my $frames = decode_json($arg);
    my $sl = ScoreList->new(frames => $frames);
-   say list_text('Input', $frames);
+   say list_text('Input           ', $frames);
+   say list_text('Input normalized', $sl->frames);
    say list_text('Frame scores', $sl->frame_scores);
    say list_text('Scores', $sl->scores);
 }

@@ -23,8 +23,6 @@
 
 package ScoreList;
 
-use strict;
-use warnings;
 use Mojo::Base -base;
 
 sub is_strike {
@@ -64,10 +62,10 @@ has 'check' => sub {
       if 10 < @{$self->frames} && !$self->is_spare_or_strike(9)
       || 11 < @{$self->frames} && !($self->is_strike(9) && $self->is_strike(10))
       || 12 < @{$self->frames};
-   return 'Can\'t determin score of 10th frame since only one ball follows'
-       if 11 == @{$self->frames} && $self->is_strike(9);
    return 'Can\'t determin score of last frame since it is a ' . ($self->is_strike($#{$self->frames}) ? 'strike' : 'spare')
-       if @{$self->frames} && $self->is_spare_or_strike($#{$self->frames});
+       if @{$self->frames} && @{$self->frames} <= 10 && $self->is_spare_or_strike($#{$self->frames});
+   return 'Can\'t determin score of 10th frame since only one ball follows'
+       if 11 == @{$self->frames} && $self->is_strike(9) && $self->is_strike(10);
    return;
 };
 
@@ -88,31 +86,37 @@ sub ball_score {
    return $score;
 }
 
+sub new {
+   my ($class, %options) = @_;
+   return bless({%options, frames => normalize($options{frames})}, $class);
+}
+
 sub frames {
    my ($self, $frames) = @_;
    if (defined($frames)) {
-      die('frames is not an arrat ref') unless ref($frames) eq 'ARRAY';
-      my $i = 0;
-      for my $frame (@$frames) {
-         die(sprintf(q{Bad frame at position %i}, $i)) unless ref($frame) eq 'ARRAY' && is_frame(@$frame);
-         $i++;
-      }
-      $self->{frames} = $frames;
-      undef($self->{check});
+      $self->{frames} = normalize($frames);
       undef($self->{frame_scores});
       undef($self->{scores});
+      undef($self->{check});
    }
    die('No frames') unless $self->{frames};
    return $self->{frames};
 }
 
-sub is_frame {
-   return @_ == 2 && is_int($_[0]) && is_int($_[1]) && $_[0] + $_[1] <= 10;
-}
-
-sub is_int {
-   my ($p) = @_;
-   return $p =~ /^\d+$/;
+sub normalize {
+   my ($frames) = @_;
+   die('No frames') unless $frames;
+   die('frames is not an array ref') unless ref($frames) eq 'ARRAY';
+   my @frames = @$frames;
+   for my $frame (@frames) {
+      die('Bad frame') if ref($frame) ne 'ARRAY' || @$frame != 2 || grep(!/^\d+/, @$frame);
+   }
+   if (@frames == 11 && $frames[10]->[0] == 10 && $frames[10]->[1]) {
+      # Allow [10,N] as 10'th and last frame
+      push(@frames, [10,0], [pop(@frames)->[1],0]);
+   }
+   die('More than 10 pins in a frame') if grep {$_->[0] + $_->[1] > 10} @frames;
+   return \@frames;
 }
 
 return 1;
