@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Copyright (C) 2016 Lars Hansen <lh@soem.dk>
+# Copyright (C) 2016-2017 Lars Hansen <lh@soem.dk>
 # 
 # Author: Lars Hansen <lh@soem.dk>
 # 
@@ -26,7 +26,7 @@ use warnings;
 use feature 'say';
 use Mojo::UserAgent;
 
-my $url = 'http://37.139.2.74/api/points';
+my $url = 'http://95.85.62.55/api/points';
 my $ua  = Mojo::UserAgent->new;
 
 die("Usage: $0 TOKEN SCORELIST\n") unless @ARGV == 2;
